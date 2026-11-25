@@ -1,0 +1,34 @@
+{
+  "$comment": "リポジトリの .claude/go-workflow.json に置くと go-workflow の既定値を上書きできる（すべて任意）。dod は既定の Definition of Done に追加する項目",
+  "commands": {
+    "format": "make fmt",
+    "modernize": "go fix ./internal/...",
+    "lint": "golangci-lint run --new-from-rev=origin/main ./...",
+    "test": "go test -race -count=1 -short ./...",
+    "vuln": "skip",
+    "formatFile": "gofumpt -w"
+  },
+  "web": {
+    "startCommand": "docker compose up -d db && go run ./cmd/server",
+    "baseURL": "http://localhost:8080",
+    "healthcheck": "http://localhost:8080/healthz",
+    "env": {
+      "APP_ENV": "local"
+    }
+  },
+  "review": {
+    "maxIterations": 3
+  },
+  "git": {
+    "mode": "ask",
+    "draft": false
+  },
+  "hooks": {
+    "formatOnEdit": true,
+    "protectConfig": true
+  },
+  "dod": [
+    "マイグレーションは up/down 両方を用意する",
+    "OpenAPI 定義 (api/openapi.yaml) を更新する"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "name": "go-workflow",
+  "version": "0.2.0",
+  "description": "Go 開発の一気通貫ワークフロー: 設計(Opus) → 設計レビュー(Opus) → 実装(Sonnet) → lint/format/test/modernize → Playwright E2E → 実装レビューループ(Sonnet) → PR 作成 → git 操作",
+  "author": {
+    "name": "keneanderson",
+    "url": "https://github.com/keneanderson"
+  },
+  "homepage": "https://github.com/keneanderson/claude-go-workflow/tree/main/plugins/go-workflow",
+  "repository": "https://github.com/keneanderson/claude-go-workflow",
+  "license": "MIT",
+  "keywords": [
+    "go",
+    "golang",
+    "workflow",
+    "design",
+    "review",
+    "security",
+    "modernize",
+    "playwright",
+    "pull-request"
+  ]
+}

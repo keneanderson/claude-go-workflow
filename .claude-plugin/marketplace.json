@@ -1,0 +1,28 @@
+{
+  "name": "go-dev-marketplace",
+  "owner": {
+    "name": "keneanderson",
+    "url": "https://github.com/keneanderson"
+  },
+  "metadata": {
+    "description": "Go 開発向け Claude Code ワークフロー（設計→レビュー→実装→品質→E2E→レビュー→PR→git）",
+    "version": "0.2.0"
+  },
+  "plugins": [
+    {
+      "name": "go-workflow",
+      "source": "./plugins/go-workflow",
+      "description": "Go 開発の一気通貫ワークフロー。リポジトリの CLAUDE.md / AGENTS.md / rules / agents / skills を尊重し、Opus で設計、Sonnet で実装・レビュー、Playwright MCP で Web 動作確認、PR 作成と git 操作まで行う",
+      "version": "0.2.0",
+      "category": "development",
+      "keywords": [
+        "go",
+        "golang",
+        "workflow",
+        "review",
+        "playwright",
+        "pr"
+      ]
+    }
+  ]
+}

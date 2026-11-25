@@ -1,0 +1,29 @@
+{
+  "description": "go-workflow: Go ファイル編集後の自動整形と、lint 設定の緩和・理由なし //nolint の防止（.claude/go-workflow.json の hooks.formatOnEdit / hooks.protectConfig で無効化可）",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/guard-config.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/format-on-edit.sh\"",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}

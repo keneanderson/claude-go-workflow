@@ -1,0 +1,10 @@
+{
+  "playwright": {
+    "command": "npx",
+    "args": ["-y", "@playwright/mcp@latest", "--isolated"]
+  },
+  "gopls": {
+    "command": "bash",
+    "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/gopls-mcp.sh"]
+  }
+}
