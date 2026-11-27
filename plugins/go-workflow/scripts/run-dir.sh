@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# go-workflow の成果物ディレクトリ（RUN_DIR）を管理する。
-#   run-dir.sh new <slug>   新しい RUN_DIR を作成してパスを出力
-#   run-dir.sh latest       直近の RUN_DIR のパスを出力（なければ終了コード 1）
+# Manages go-workflow's artifact directory (RUN_DIR).
+#   run-dir.sh new <slug>   create a new RUN_DIR and print its path
+#   run-dir.sh latest       print the most recent RUN_DIR's path (exit code 1 if none)
 #   run-dir.sh phase <RUN_DIR> <phase> <status> [note]
-#                           state.json と workflow.md にフェーズの状態を記録
-#                           status: running|done|skip|fail|waiting  （iteration を数えるには status=iter）
-#   run-dir.sh status [RUN_DIR]  state.json の要約を表示（再開ポイントの判断用）
-# RUN_DIR は <repo>/.claude/go-workflow/runs/<timestamp>-<slug>/ に作られ、
-# .git/info/exclude に登録されるためリポジトリの差分には現れない。
+#                           record a phase's status in state.json and workflow.md
+#                           status: running|done|skip|fail|waiting  (use status=iter to count an iteration)
+#   run-dir.sh status [RUN_DIR]  show a summary of state.json (to decide where to resume)
+# RUN_DIR is created at <repo>/.claude/go-workflow/runs/<timestamp>-<slug>/ and registered in
+# .git/info/exclude, so it never shows up in the repository's diff.
 set -euo pipefail
 
 root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)

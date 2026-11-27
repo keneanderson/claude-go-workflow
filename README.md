@@ -1,12 +1,12 @@
 # go-dev-marketplace
 
-Go 開発用の Claude Code プラグインマーケットプレイス。
+A Claude Code plugin marketplace for Go development.
 
-| プラグイン | 内容 |
-|------------|------|
-| [go-workflow](plugins/go-workflow/README.md) | 確認質問 → 設計(Opus) → 設計レビュー(Opus) → 実装(Sonnet) → lint/format/test/modernize/coverage → Playwright E2E → 実装レビューループ(Sonnet、指摘は Opus で検証) → Definition of Done → PR 作成 → git 操作 |
+| Plugin | Description |
+|--------|-------------|
+| [go-workflow](plugins/go-workflow/README.md) | Clarifying questions → design (Opus) → design review (Opus) → implementation (Sonnet) → lint/format/test/modernize/coverage → Playwright E2E → implementation review loop (Sonnet, findings verified by Opus) → Definition of Done → PR creation → git operations |
 
-## インストール
+## Installation
 
 ```bash
 claude plugin marketplace add keneanderson/claude-go-workflow
@@ -16,7 +16,7 @@ claude plugin marketplace add keneanderson/claude-go-workflow
 claude plugin install go-workflow@go-dev-marketplace
 ```
 
-チームで使う場合は、各リポジトリの `.claude/settings.json` に以下を入れると、trust 時にインストールが促されます。
+For team use, add the following to each repository's `.claude/settings.json`. Team members will be prompted to install the plugin when they trust the repository.
 
 ```json
 {
@@ -27,17 +27,17 @@ claude plugin install go-workflow@go-dev-marketplace
 }
 ```
 
-## 使い方
+## Usage
 
 ```
-/go-workflow:dev ユーザー一覧 API にページネーションを追加する
+/go-workflow:dev Add pagination to the user list API
 /go-workflow:dev https://github.com/org/repo/issues/123 --git=print
 /go-workflow:dev --resume
 ```
 
-詳細は [plugins/go-workflow/README.md](plugins/go-workflow/README.md) を参照してください。
+See [plugins/go-workflow/README.md](plugins/go-workflow/README.md) for details.
 
-## 開発
+## Development
 
 ```bash
 claude plugin validate .
@@ -45,6 +45,6 @@ claude plugin validate ./plugins/go-workflow
 claude plugin eval ./plugins/go-workflow --runs 3 --no-publish
 ```
 
-## ライセンス
+## License
 
 [MIT](LICENSE)

@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# Go の品質チェックを順に実行する:
+# Runs the Go quality checks in order:
 #   format → modernize → tidy → build → vet → lint → test → vuln
 #
 # usage: quality.sh [--fix] [--base <ref>] [--all] [--only a,b] [--skip a,b] [--log <file>]
-#   --fix         format / modernize / tidy を自動修正モードで実行（なしならチェックのみ）
-#   --base <ref>  変更ファイル・lint 差分の基準（例: origin/main）
-#   --all         format / modernize を変更ファイル限定ではなく全体に適用
-#   --only/--skip 実行するステップを絞る
-#   --log <file>  出力をファイルにも追記
-#   --cover <file> カバレッジプロファイルの出力先（既定: --log と同じディレクトリの coverage.out）
+#   --fix         run format / modernize / tidy in auto-fix mode (check only without it)
+#   --base <ref>  base for changed files and the lint diff (e.g. origin/main)
+#   --all         apply format / modernize to everything, not just changed files
+#   --only/--skip choose which steps to run
+#   --log <file>  also append the output to a file
+#   --cover <file> where to write the coverage profile (default: coverage.out in the same directory as --log)
 #
-# コマンド解決順（ステップごと）:
-#   1. .claude/go-workflow.json の commands.<step>（"skip" で無効化）
-#   2. Makefile / Taskfile の同名ターゲット（format は fmt|format、vuln は vuln|govulncheck）
-#   3. 既定コマンド
+# Command resolution order (per step):
+#   1. commands.<step> in .claude/go-workflow.json ("skip" disables it)
+#   2. a Makefile / Taskfile target of the same name (fmt|format for format, vuln|govulncheck for vuln)
+#   3. the default command
 set -uo pipefail
 
 fix=false; base=""; all=false; only=""; skip=""; log=""; cover=""
@@ -42,7 +42,7 @@ root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 cd "$root" || exit 1
 conf="$root/.claude/go-workflow.json"
 
-# go.mod がルートにない場合は 1 つ目の go.mod のディレクトリで実行
+# If go.mod is not at the root, run in the directory of the first go.mod found
 if [ ! -f go.mod ]; then
   m=$(find . -maxdepth 3 -name go.mod -not -path './vendor/*' 2>/dev/null | sort | head -n 1)
   [ -n "$m" ] && cd "$(dirname "$m")"
@@ -65,7 +65,7 @@ conf_cmd() { # $1: step
   return 1
 }
 
-make_target() { # $@: 候補ターゲット名
+make_target() { # $@: candidate target names
   local t
   for t in "$@"; do
     if [ -f Makefile ] && grep -qE "^${t}:" Makefile; then printf 'make %s' "$t"; return 0; fi
@@ -76,7 +76,7 @@ make_target() { # $@: 候補ターゲット名
   return 1
 }
 
-# ---------- 対象ファイル・パッケージ ----------
+# ---------- Target files and packages ----------
 go_minor=$(go env GOVERSION 2>/dev/null | sed -E 's/^go1\.([0-9]+).*/\1/')
 case "$go_minor" in ''|*[!0-9]*) go_minor=0 ;; esac
 
@@ -86,7 +86,7 @@ changed_go_files() {
     git diff --name-only --diff-filter=ACMR HEAD 2>/dev/null
     git ls-files --others --exclude-standard 2>/dev/null
   } | grep -E '\.go$' | sort -u | while read -r f; do
-    # moddir 相対に変換し、存在するもののみ
+    # Convert to paths relative to moddir, keeping only files that exist
     abs="$root/$f"
     [ -f "$abs" ] || continue
     case "$abs" in "$moddir"/*) printf '%s\n' "${abs#"$moddir"/}" ;; esac
@@ -96,7 +96,7 @@ changed_go_files() {
 files=$(changed_go_files)
 pkgs=$(printf '%s\n' "$files" | sed '/^$/d' | xargs -n1 dirname 2>/dev/null | sort -u | sed 's|^|./|; s|^\./\.$|.|')
 
-# ---------- 既定コマンド ----------
+# ---------- Default commands ----------
 fmt_default() {
   local targets
   if $all; then targets=$(git ls-files '*.go' | grep -vE '(^|/)vendor/'); else targets=$files; fi
@@ -141,7 +141,7 @@ tidy_default() {
 
 lint_default() {
   if has_cmd golangci-lint; then
-    # golangci-lint はビルドに使った Go より新しい Go のコードを解析できない（panic する）
+    # golangci-lint cannot analyze code for a Go newer than the one it was built with (it panics)
     local built
     built=$(golangci-lint version 2>&1 | sed -nE 's/.*built with go1\.([0-9]+).*/\1/p' | head -n 1)
     if [ -n "$built" ] && [ "$built" -lt "$go_minor" ]; then
@@ -165,7 +165,7 @@ test_default() {
   go test $args ./...
 }
 
-coverage_report() { # 変更パッケージと全体のステートメントカバレッジ
+coverage_report() { # statement coverage for the changed packages and overall
   [ -n "$cover" ] && [ -s "$cover" ] || return 0
   echo
   echo "## Coverage"
@@ -185,7 +185,7 @@ vuln_default() {
   fi
 }
 
-resolve() { # $1: step → 実行するコマンド文字列
+resolve() { # $1: step → the command string to run
   local step=$1 c
   if c=$(conf_cmd "$step"); then printf '%s' "$c"; return; fi
   case "$step" in
@@ -201,7 +201,7 @@ resolve() { # $1: step → 実行するコマンド文字列
   printf '%s' "$c"
 }
 
-# ---------- 実行 ----------
+# ---------- Run ----------
 [ -n "$cover" ] && rm -f "$cover"
 steps="format modernize tidy build vet lint test vuln"
 summary=""; failed=""
@@ -223,9 +223,9 @@ for s in $steps; do
   dur=$(( $(date +%s) - start ))s
   case $rc in
     0) st=PASS ;;
-    3) st=WARN ;;                    # modernize の提案あり（チェックモード）
-    4) st=SKIP ;;                    # ツール未インストール
-    5) st=ENV ;;                     # ツールと環境の不整合（要対応だがコードの問題ではない）
+    3) st=WARN ;;                    # modernize has suggestions (check mode)
+    4) st=SKIP ;;                    # tool not installed
+    5) st=ENV ;;                     # tool/environment mismatch (needs action, but not a code problem)
     *) st=FAIL; failed="$failed $s" ;;
   esac
   echo "### [$s] => $st (rc=$rc, $dur)"

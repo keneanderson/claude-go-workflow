@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# 作業ツリーのスナップショット（チェックポイント）をコミットせずに保存・復元する。
-# ブランチ・インデックス・作業ツリーには触れず、refs/go-workflow/<run>/<name> に保存する
-# （refs/heads ではないため通常の push には含まれない）。
+# Saves and restores snapshots (checkpoints) of the working tree without committing.
+# It never touches the branch, index or working tree, and saves to refs/go-workflow/<run>/<name>
+# (not under refs/heads, so a normal push does not include them).
 #
-#   checkpoint.sh save <RUN_DIR> <name>      現在の作業ツリー（未追跡含む・.gitignore 対象は除外）を保存
-#   checkpoint.sh list <RUN_DIR>             保存済み一覧
-#   checkpoint.sh diff <RUN_DIR> <name>      チェックポイント → 現在 の差分（stat）
-#   checkpoint.sh restore <RUN_DIR> <name>   作業ツリーをチェックポイントの内容に戻す（追跡ファイルのみ・新規ファイルは削除しない）
+#   checkpoint.sh save <RUN_DIR> <name>      save the current working tree (including untracked files, excluding .gitignore'd ones)
+#   checkpoint.sh list <RUN_DIR>             list saved checkpoints
+#   checkpoint.sh diff <RUN_DIR> <name>      diff from the checkpoint to now (stat)
+#   checkpoint.sh restore <RUN_DIR> <name>   restore the working tree to the checkpoint (tracked files only; new files are not deleted)
 set -euo pipefail
 
 cmd=${1:-}; run_dir=${2:-}; name=${3:-}
@@ -22,9 +22,9 @@ case "$cmd" in
     tmp_dir=$(mktemp -d)
     tmp_index="$tmp_dir/index"
     trap 'rm -rf "$tmp_dir"' EXIT
-    # 実際のインデックスを汚さないよう一時インデックスで全体を add
+    # Add everything to a temporary index so the real index stays untouched
     if git rev-parse --verify -q HEAD >/dev/null; then GIT_INDEX_FILE="$tmp_index" git read-tree HEAD; fi
-    # RUN_DIR は .git/info/exclude 登録済みなので -A でも含まれない
+    # RUN_DIR is already in .git/info/exclude, so -A does not include it
     GIT_INDEX_FILE="$tmp_index" git add -A -- .
     tree=$(GIT_INDEX_FILE="$tmp_index" git write-tree)
     parent=()
@@ -40,11 +40,11 @@ case "$cmd" in
   restore)
     [ -n "$name" ] || { echo "name required" >&2; exit 2; }
     git rev-parse --verify -q "$prefix/$name" >/dev/null || { echo "no checkpoint: $name" >&2; exit 1; }
-    # 復元前の状態も自動で保存しておく（やり直し用）
+    # Also save the pre-restore state automatically (so the restore can be undone)
     bash "$0" save "$run_dir" "before-restore-$(date +%H%M%S)" >/dev/null
     git restore --source="$prefix/$name" --worktree -- .
     echo "restored worktree to checkpoint '$name' (index and branch untouched)."
-    # チェックポイントに存在しない未追跡ファイルは削除せず残しているので知らせる
+    # Untracked files absent from the checkpoint are kept, not deleted, so report them
     snap=$(git ls-tree -r --name-only "$prefix/$name")
     extra=$(git ls-files --others --exclude-standard | while IFS= read -r f; do
       printf '%s\n' "$snap" | grep -qxF -- "$f" || printf '  %s\n' "$f"

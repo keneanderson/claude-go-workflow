@@ -1,37 +1,37 @@
 ---
 name: implement
-description: go-workflow の Phase 3（実装）。承認済み design.md の実装ステップを縦に薄いスライス単位で Sonnet の go-implementer に実装させる。テストを先に書いて失敗を確認してから実装し、バッチごとにチェックポイントを保存する。単体でも「/go-workflow:implement」で使える。
+description: Phase 3 of go-workflow (implementation). Has Sonnet go-implementer implement the approved design.md's implementation steps in thin vertical slices. Tests are written first and confirmed to fail before implementing, and a checkpoint is saved for each batch. Can also be used on its own with "/go-workflow:implement".
 argument-hint: "[--run=<RUN_DIR>] [--steps=1-3]"
 disable-model-invocation: true
 ---
 
-# Phase 3: 実装（sonnet）
+# Phase 3: Implementation (sonnet)
 
-入力: $ARGUMENTS
+Input: $ARGUMENTS
 
-> サブエージェントはプラグインの名前空間付きで起動する（例: `subagent_type: "go-workflow:go-implementer"`）。リポジトリの `.claude/agents/` に同じ役割のエージェントがあればそちらを優先してよい。
+> Launch subagents with the plugin namespace (for example `subagent_type: "go-workflow:go-implementer"`). If the repository's `.claude/agents/` has an agent with the same role, you may prefer that one.
 
-スクリプト: `${CLAUDE_SKILL_DIR}/../../scripts/`（以下 `SCRIPTS`）
-RUN_DIR: `--run=` 指定、なければ `bash SCRIPTS/run-dir.sh latest`。`design.md` がない、または `state.json` の `design-review` が done でない場合は、ユーザーに確認してから進める。
+Scripts: `${CLAUDE_SKILL_DIR}/../../scripts/` (referred to as `SCRIPTS` below)
+RUN_DIR: the `--run=` value, otherwise `bash SCRIPTS/run-dir.sh latest`. If there is no `design.md`, or `design-review` in `state.json` is not done, confirm with the user before proceeding.
 
-## 手順
+## Procedure
 
-1. `design.md` の「実装ステップ」を **バッチ** に分ける
-   - 縦のスライス（1 つの振る舞いを型 → ロジック → ハンドラ → テストまで通す）を優先し、層ごとの横切りは避ける
-   - 目安: 1 バッチ = 変更ファイル 10 個程度、各バッチ完了時点でビルドとテストが通る状態
-   - 小さなタスクなら 1 バッチでよい
-2. バッチごとに **順番に**（同じファイルを触る可能性があるため並列にしない）:
+1. Split the "Implementation steps" in `design.md` into **batches**
+   - Prefer vertical slices (take one behavior through types → logic → handler → tests) and avoid horizontal layer-by-layer slices
+   - Guideline: one batch ≈ 10 changed files, and the build and tests pass at the end of each batch
+   - A small task can be a single batch
+2. For each batch, **in order** (not in parallel, since batches may touch the same files):
    1. `bash SCRIPTS/checkpoint.sh save "$RUN_DIR" pre-implement-<n>`
-   2. `bash SCRIPTS/run-dir.sh phase "$RUN_DIR" implement iter "batch <n>: <ステップ番号>"`
-   3. `go-implementer` を起動。プロンプト:
-      - `RUN_DIR`、モード `implement`、担当ステップ番号と、そのステップの受け入れ条件
-      - 「context.md / exploration.md のリポジトリ規約、design.md に従うこと。設計からの逸脱は報告すること」
-      - 「振る舞いの追加・バグ修正は、先にテストを書いて **失敗することを確認（RED）** してから実装すること」
-      - 前のバッチの実装結果の要約（変更ファイル・公開した型/関数）
-   4. 報告を `RUN_DIR/implement.md` に追記し、`STATUS:` に応じて対応する（dev スキルの共通ルール参照）。DONE でも `git diff --stat` で実際に変更されたことを確認し、`go build ./... && go test ./<変更パッケージ>/...` を自分でも実行する
-      - 同じバッチで 2 回 BLOCKED / 失敗が続いたら、`go-implementer` を `model: opus` で新しく起動し、「前任者が N 回試みた。implement.md に経緯がある」と伝えて引き継がせる
-   5. 「設計からの逸脱」が重大（公開 API・DB スキーマ・セキュリティ方針の変更）なら、続行前にユーザーに確認する。実装が破綻した場合は `checkpoint.sh restore` で戻してやり直す
-3. コード生成（`go generate`, sqlc, mockgen, wire, buf, templ）が絡む場合は、生成元の変更後にリポジトリのコマンドで再生成されているか確認する
-4. `bash SCRIPTS/run-dir.sh phase "$RUN_DIR" implement done "<変更ファイル数>, 逸脱: <なし|あり>"`
+   2. `bash SCRIPTS/run-dir.sh phase "$RUN_DIR" implement iter "batch <n>: <step numbers>"`
+   3. Launch `go-implementer`. Prompt:
+      - `RUN_DIR`, mode `implement`, the assigned step numbers and their acceptance criteria
+      - "Follow the repository conventions in context.md / exploration.md and design.md. Report any deviation from the design"
+      - "For new behavior or a bug fix, write the test first and **confirm it fails (RED)** before implementing"
+      - A summary of the previous batches' results (changed files, exported types/functions)
+   4. Append the report to `RUN_DIR/implement.md` and respond according to `STATUS:` (see the common rules in the dev skill). Even on DONE, confirm with `git diff --stat` that files actually changed, and run `go build ./... && go test ./<changed packages>/...` yourself
+      - If the same batch is BLOCKED / fails twice in a row, launch a fresh `go-implementer` with `model: opus`, tell it "the previous implementer tried N times; the history is in implement.md", and hand the work over
+   5. If a "deviation from the design" is significant (changes to a public API, the DB schema or the security policy), confirm with the user before continuing. If the implementation breaks down, roll back with `checkpoint.sh restore` and start over
+3. If code generation is involved (`go generate`, sqlc, mockgen, wire, buf, templ), check that the generated code was regenerated with the repository's commands after the sources changed
+4. `bash SCRIPTS/run-dir.sh phase "$RUN_DIR" implement done "<number of changed files>, deviations: <none|yes>"`
 
-リポジトリに実装用の独自 agent / skill（例: Go のコーディング規約をまとめたスキル）がある場合は、`go-implementer` へのプロンプトで「そのスキルの規約にも従うこと」と名前を挙げて伝えます。
+If the repository has its own implementation agent / skill (e.g. a skill that collects Go coding conventions), name it in the prompt to `go-implementer` and say "also follow that skill's conventions".

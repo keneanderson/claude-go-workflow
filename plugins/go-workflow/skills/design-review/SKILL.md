@@ -1,38 +1,38 @@
 ---
 name: design-review
-description: go-workflow の Phase 2（設計レビュー）。Opus の go-design-reviewer と go-security-reviewer を並列に走らせ、Blocker/Major があれば go-architect に改訂させ（最大2回）、最後にユーザー承認を取る。単体でも「/go-workflow:design-review」で使える。
+description: Phase 2 of go-workflow (design review). Runs Opus go-design-reviewer and go-security-reviewer in parallel, has go-architect revise the design if there are Blocker/Major findings (up to 2 rounds), and finally gets user approval. Can also be used on its own with "/go-workflow:design-review".
 argument-hint: "[--run=<RUN_DIR>]"
 disable-model-invocation: true
 ---
 
-# Phase 2: 設計レビュー → ユーザー承認
+# Phase 2: Design review → user approval
 
-入力: $ARGUMENTS
+Input: $ARGUMENTS
 
-> サブエージェントはプラグインの名前空間付きで起動する（例: `subagent_type: "go-workflow:go-architect"`）。リポジトリの `.claude/agents/` に同じ役割のエージェントがあればそちらを優先してよい。
+> Launch subagents with the plugin namespace (for example `subagent_type: "go-workflow:go-architect"`). If the repository's `.claude/agents/` has an agent with the same role, you may prefer that one.
 
-RUN_DIR: `--run=` 指定、なければ `bash ${CLAUDE_SKILL_DIR}/../../scripts/run-dir.sh latest`。`design.md` がなければ停止して `/go-workflow:design` を案内。
+RUN_DIR: the `--run=` value, otherwise `bash ${CLAUDE_SKILL_DIR}/../../scripts/run-dir.sh latest`. If there is no `design.md`, stop and point to `/go-workflow:design`.
 
-## モデル選定の理由
+## Why this model
 
-設計の誤りは後工程すべてに波及し、修正コストが最も高い。一方で設計書は短く、レビューのトークンコストは小さい。
-そのため **設計レビューは opus**（設計者と同じモデルだが、別コンテキスト・別の役割で独立に検証する）。セキュリティ観点は sonnet の専任エージェントで並列に確認する。
+Design mistakes propagate to every later phase and cost the most to fix. The design doc, on the other hand, is short, so the token cost of reviewing it is small.
+So **the design review uses opus** (the same model as the designer, but verifying independently in a separate context with a different role). Security is checked in parallel by a dedicated sonnet agent.
 
-## 手順（最大 2 ラウンド）
+## Procedure (up to 2 rounds)
 
-1. 以下を **同じメッセージで並列に** 起動する:
-   - `go-design-reviewer`（RUN_DIR、タスク）
-   - `go-security-reviewer`（RUN_DIR、モード `design`、ラウンド番号）
-   - リポジトリに設計レビュー用の agent / skill があれば（`context.md` 参照）それも並列で
-2. 結果を `RUN_DIR/design-review.md` に統合して保存（ラウンド 2 は `design-review-2.md`）。各指摘に通し番号を振る
-3. 判定:
-   - Blocker / Major / セキュリティ Critical・High が **0 件** → 承認ステップへ
-   - 1 件以上 → `go-architect` に「design.md と design-review.md を読み、Blocker/Major に対応して改訂せよ。Minor は妥当なら取り込み、取り込まない場合は理由を改訂履歴に書け」と依頼し、`design.md` を上書き → ラウンド 2 へ
-   - ラウンド 2 でも残る → 残った指摘と両論をユーザーに提示して判断を仰ぐ
-4. **ユーザー承認（必須）**: 設計書の要点（目的、変更ファイル、主要な設計判断、セキュリティ対策、テスト計画、未決事項）を 15 行程度で提示し、AskUserQuestion で
-   - 「承認して実装へ（推奨）」（`--alternatives` で複数案を作った場合は、採用案の選択もここで行う）
-   - 「修正指示を出す」→ 指示を受けて go-architect で改訂し、手順 1 からやり直し
-   - 「中止」
-5. `bash ${CLAUDE_SKILL_DIR}/../../scripts/run-dir.sh phase "$RUN_DIR" design-review done "<ラウンド数・指摘件数・承認>"`（各ラウンド開始時は `iter`、承認待ちの間は `waiting`）
+1. Launch the following **in parallel in the same message**:
+   - `go-design-reviewer` (RUN_DIR, task)
+   - `go-security-reviewer` (RUN_DIR, mode `design`, round number)
+   - If the repository has a design-review agent / skill (see `context.md`), run it in parallel too
+2. Merge the results into `RUN_DIR/design-review.md` (round 2 goes to `design-review-2.md`). Number every finding
+3. Decide:
+   - **0** Blocker / Major / security Critical or High findings → go to the approval step
+   - 1 or more → ask `go-architect` to "read design.md and design-review.md and revise the design to address the Blocker/Major findings. Adopt Minor findings if reasonable; if you do not, write the reason in the revision history", overwrite `design.md` → round 2
+   - Still remaining after round 2 → present the remaining findings and both sides to the user and ask them to decide
+4. **User approval (required)**: present the key points of the design doc (goal, changed files, key design decisions, security measures, test plan, open questions) in about 15 lines, and ask with AskUserQuestion:
+   - "Approve and implement (recommended)" (if `--alternatives` produced several designs, the user also picks one here)
+   - "Request changes" → take the instructions, have go-architect revise, and start again from step 1
+   - "Cancel"
+5. `bash ${CLAUDE_SKILL_DIR}/../../scripts/run-dir.sh phase "$RUN_DIR" design-review done "<rounds, number of findings, approval>"` (use `iter` at the start of each round, and `waiting` while waiting for approval)
 
-Plan モードの場合は、手順 4 を ExitPlanMode（設計書の要点を plan として提示）で代替します。
+In Plan mode, step 4 is replaced by ExitPlanMode (presenting the key points of the design doc as the plan).

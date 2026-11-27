@@ -1,75 +1,75 @@
-# Modern Go リファレンス
+# Modern Go reference
 
-`go.mod` の `go` ディレクティブ以下のバージョンの機能のみ使うこと。不確かなものは `go doc` で確認する。
+Only use features from versions up to the `go` directive in `go.mod`. Check anything uncertain with `go doc`.
 
-## 旧 → 新 置き換え表
+## Old → new replacement table
 
-| 旧 | 新 | 最低バージョン |
-|----|----|----------------|
+| Old | New | Minimum version |
+|-----|-----|-----------------|
 | `interface{}` | `any` | 1.18 |
-| `strings.Index` + スライス | `strings.Cut` / `CutPrefix` / `CutSuffix` | 1.18 / 1.20 |
-| 複数エラーの自前結合 | `errors.Join`、`fmt.Errorf` で複数 `%w` | 1.20 |
-| `sync/atomic.AddInt64(&x)` | `atomic.Int64` などの型 | 1.19 |
+| `strings.Index` + slicing | `strings.Cut` / `CutPrefix` / `CutSuffix` | 1.18 / 1.20 |
+| Hand-rolled joining of multiple errors | `errors.Join`, multiple `%w` in `fmt.Errorf` | 1.20 |
+| `sync/atomic.AddInt64(&x)` | Types such as `atomic.Int64` | 1.19 |
 | `if a < b { m = a }` | `min(a, b)` / `max(a, b)` | 1.21 |
-| map を for で全削除 | `clear(m)` | 1.21 |
-| `sort.Slice` / 手書きの contains・index | `slices.Sort` / `slices.SortFunc` / `slices.Contains` / `slices.Index` | 1.21 |
-| map のキー収集ループ | `slices.Sorted(maps.Keys(m))` | 1.23 |
-| `log` / 外部ロガーの新規導入 | `log/slog`（既存ロガーがあればそれに従う） | 1.21 |
-| `sync.Once` + 変数 | `sync.OnceFunc` / `OnceValue` / `OnceValues` | 1.21 |
-| `v := v`（ループ変数のコピー） | 不要（1.22 から反復ごとに新しい変数） | 1.22 |
+| Deleting every map entry in a for loop | `clear(m)` | 1.21 |
+| `sort.Slice` / hand-written contains and index | `slices.Sort` / `slices.SortFunc` / `slices.Contains` / `slices.Index` | 1.21 |
+| A loop collecting map keys | `slices.Sorted(maps.Keys(m))` | 1.23 |
+| Introducing `log` / an external logger in new code | `log/slog` (follow the existing logger if there is one) | 1.21 |
+| `sync.Once` + a variable | `sync.OnceFunc` / `OnceValue` / `OnceValues` | 1.21 |
+| `v := v` (copying the loop variable) | Not needed (since 1.22 each iteration has a new variable) | 1.22 |
 | `for i := 0; i < n; i++` | `for i := range n` | 1.22 |
-| ルーター外部依存のための単純なパスマッチ | `mux.HandleFunc("GET /items/{id}", h)` + `r.PathValue("id")` | 1.22 |
-| `math/rand` | `math/rand/v2`（秘密用途は `crypto/rand`） | 1.22 |
+| An external router dependency just for simple path matching | `mux.HandleFunc("GET /items/{id}", h)` + `r.PathValue("id")` | 1.22 |
+| `math/rand` | `math/rand/v2` (`crypto/rand` for secrets) | 1.22 |
 | `if x == "" { x = def }` | `cmp.Or(x, def)` | 1.22 |
-| スライス結合の append 連鎖 | `slices.Concat` | 1.22 |
-| コールバック式のイテレータ | `iter.Seq[T]` / `iter.Seq2[K,V]` + range-over-func | 1.23 |
+| Chained appends to concatenate slices | `slices.Concat` | 1.22 |
+| Callback-style iterators | `iter.Seq[T]` / `iter.Seq2[K,V]` + range-over-func | 1.23 |
 | `context.WithCancel(context.Background())` in tests | `t.Context()` | 1.24 |
 | `for i := 0; i < b.N; i++` | `for b.Loop()` | 1.24 |
-| `filepath.Join(root, userPath)` + 自前検証 | `os.Root` / `os.OpenInRoot` | 1.24 |
-| `json:",omitempty"`（構造体・time.Time のゼロ値） | `json:",omitzero"` | 1.24 |
-| `strings.Split` で行/フィールド走査 | `strings.Lines` / `SplitSeq` / `FieldsSeq`（bytes も同様） | 1.24 |
-| `tools.go` でツール依存を管理 | `go get -tool <pkg>` / `go tool <name>` | 1.24 |
-| 秘密トークン生成の自前実装 | `crypto/rand.Text()` | 1.24 |
+| `filepath.Join(root, userPath)` + hand-rolled validation | `os.Root` / `os.OpenInRoot` | 1.24 |
+| `json:",omitempty"` (zero values of structs and time.Time) | `json:",omitzero"` | 1.24 |
+| Iterating lines/fields with `strings.Split` | `strings.Lines` / `SplitSeq` / `FieldsSeq` (same for bytes) | 1.24 |
+| Managing tool dependencies with `tools.go` | `go get -tool <pkg>` / `go tool <name>` | 1.24 |
+| A hand-rolled secret token generator | `crypto/rand.Text()` | 1.24 |
 | `wg.Add(1); go func(){ defer wg.Done() ... }()` | `wg.Go(func(){ ... })` | 1.25 |
-| 時間依存テストの sleep | `testing/synctest` | 1.25 |
-| 自前の CSRF（Origin/Sec-Fetch-Site チェック） | `http.CrossOriginProtection` | 1.25 |
+| Sleeps in time-dependent tests | `testing/synctest` | 1.25 |
+| Hand-rolled CSRF (Origin/Sec-Fetch-Site checks) | `http.CrossOriginProtection` | 1.25 |
 | `var target *MyErr; errors.As(err, &target)` | `target, ok := errors.AsType[*MyErr](err)` | 1.26 |
-| `p := new(T); *p = v` / ポインタ用ヘルパ関数 | `new(v)`（式を取る `new`） | 1.26 |
-| 型に属するのにパッケージレベルに置いた汎用関数 | ジェネリックメソッド `func (s Set[T]) Map[U any](...)`（インターフェースのメソッドには不可・ジェネリックメソッドでインターフェースは満たせない） | 1.27 |
+| `p := new(T); *p = v` / pointer helper functions | `new(v)` (`new` taking an expression) | 1.26 |
+| A generic function placed at package level although it belongs to a type | Generic methods `func (s Set[T]) Map[U any](...)` (not allowed as interface methods, and a generic method cannot satisfy an interface) | 1.27 |
 | `i := strings.LastIndex(s, sep); s[:i], s[i+len(sep):]` | `strings.CutLast` / `bytes.CutLast` | 1.27 |
-| `url.URL` / `url.Values` の手書きディープコピー | `URL.Clone()` / `Values.Clone()` | 1.27 |
-| `github.com/google/uuid` 等の UUID 依存 | 標準ライブラリ `uuid` パッケージ（v3/v5 名前空間 UUID や DB の Scanner 連携に依存していないか確認してから） | 1.27 |
-| synctest バブル内の `time.Sleep` + `synctest.Wait` | `synctest.Sleep` | 1.27 |
-| synctest と組み合わせる `httptest.NewServer` | `httptest.NewTestServer`（インメモリの疑似ネットワーク） | 1.27 |
-| JSON の新規コードで細かい挙動制御が必要 | `encoding/json/v2` + `encoding/json/jsontext`（v2 は不正 UTF-8 と重複キーを拒否する。既存の `encoding/json` は v2 実装の上で v1 の挙動を維持するので移行は必須ではない） | 1.27 |
+| Hand-written deep copies of `url.URL` / `url.Values` | `URL.Clone()` / `Values.Clone()` | 1.27 |
+| UUID dependencies such as `github.com/google/uuid` | The standard library `uuid` package (after checking you do not rely on v3/v5 namespace UUIDs or DB Scanner integration) | 1.27 |
+| `time.Sleep` + `synctest.Wait` inside a synctest bubble | `synctest.Sleep` | 1.27 |
+| `httptest.NewServer` combined with synctest | `httptest.NewTestServer` (an in-memory fake network) | 1.27 |
+| New JSON code that needs fine-grained control | `encoding/json/v2` + `encoding/json/jsontext` (v2 rejects invalid UTF-8 and duplicate keys. The existing `encoding/json` keeps v1 behavior on top of the v2 implementation, so migrating is not required) | 1.27 |
 
-上記以外の 1.27 以降の機能は https://go.dev/doc/devel/release のリリースノートを確認してから使う（記憶で書かない）。
+For any 1.27+ feature not listed above, check the release notes at https://go.dev/doc/devel/release before using it (do not write from memory).
 
-## Go のバージョンを上げるときの確認（1.27）
+## Checks when upgrading Go (1.27)
 
-コードの書き換えではなく、事前確認が必要なもの:
+Items that need checking beforehand rather than code rewrites:
 
-- `go.mod` の `godebug` や `//go:debug` で、1.27 で削除された GODEBUG 設定（`asynctimerchan` など）を旧値に固定していないか → ビルドエラーになる（`git grep -n 'go:debug'; grep -n godebug go.mod`）
-- `go test` が `stdversion` vet チェックを実行するようになり、go ディレクティブより新しい標準ライブラリ API の使用がテスト失敗になる → チェックを黙らせず、go ディレクティブを上げるかビルドタグで分ける
-- `encoding/json` は v2 実装ベースになり、エラーメッセージの文言が変わりうる → エラー文字列を比較しているテストを確認
-- macOS 向けビルドの最低対応バージョンが 13.0
-- `go fix` に modernizer（`atomictypes`, `embedlit`, `slicesbackward`, `unsafefuncs`）が追加され、`fmtappendf` は削除。ツールチェーン更新後に `go fix -diff ./...` で確認
+- Check that `godebug` in `go.mod` or `//go:debug` does not pin a GODEBUG setting removed in 1.27 (such as `asynctimerchan`) to an old value → it becomes a build error (`git grep -n 'go:debug'; grep -n godebug go.mod`)
+- `go test` now runs the `stdversion` vet check, so using standard library APIs newer than the go directive fails the tests → do not silence the check; raise the go directive or separate the code with build tags
+- `encoding/json` is now based on the v2 implementation, and error message wording may change → check tests that compare error strings
+- The minimum supported version for macOS builds is 13.0
+- `go fix` gained modernizers (`atomictypes`, `embedlit`, `slicesbackward`, `unsafefuncs`) and `fmtappendf` was removed. After updating the toolchain, check with `go fix -diff ./...`
 
-## 実行時の調査に使える新機能
+## New features for runtime investigation
 
-- goroutine リーク: `runtime/pprof` の `goroutineleak` プロファイル（1.27 で正式、`/debug/pprof/goroutineleak`）。到達不能な同期プリミティブで止まった goroutine を検出する
+- Goroutine leaks: the `goroutineleak` profile in `runtime/pprof` (official in 1.27, `/debug/pprof/goroutineleak`). It detects goroutines stuck on unreachable synchronization primitives
 
-## 自動モダナイズ（`go fix` / modernize）
+## Automatic modernization (`go fix` / modernize)
 
-- Go 1.26 以降: `go fix ./...` が modernize アナライザ群を実行する（`go fix -diff ./...` で差分確認のみ）
-- Go 1.25 以前: `go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest -fix -test ./...`
-- golangci-lint v2 を使っているリポジトリは `.golangci.yml` で `modernize` / `intrange` / `copyloopvar` / `usestdlibvars` などが有効か確認し、リポジトリの設定に従う
-- 自動修正はタスクで触ったパッケージに限定するのが基本。全体に適用すると無関係な差分が大量に出る
+- Go 1.26+: `go fix ./...` runs the modernize analyzers (`go fix -diff ./...` only shows the diff)
+- Go 1.25 and earlier: `go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest -fix -test ./...`
+- In repositories using golangci-lint v2, check whether `modernize` / `intrange` / `copyloopvar` / `usestdlibvars` and the like are enabled in `.golangci.yml`, and follow the repository's settings
+- As a rule, limit automatic fixes to the packages the task touched. Applying them everywhere produces a large unrelated diff
 
-## その他の現代的な慣習
+## Other modern practices
 
-- エラー: `fmt.Errorf("op: %w", err)`、比較は `errors.Is` / `errors.As`（`errors.AsType`）
-- HTTP サーバー: `http.Server` に `ReadHeaderTimeout` などを必ず設定、`http.DefaultClient` ではなくタイムアウト付きクライアント
-- JSON v2（`encoding/json/v2`）は 1.25〜1.26 では `GOEXPERIMENT=jsonv2` が必要なので使わない。1.27 以降は使ってよいが、既存の `encoding/json` からの置き換えは挙動差（不正 UTF-8・重複キーの拒否など）を確認してから
-- テスト: table-driven + `t.Run`、`t.Cleanup`、`t.TempDir`、`t.Setenv`、`go test -race`
-- 構造化ログ: `slog.InfoContext(ctx, "msg", "key", v)`、属性に PII を入れない
+- Errors: `fmt.Errorf("op: %w", err)`, compare with `errors.Is` / `errors.As` (`errors.AsType`)
+- HTTP servers: always set `ReadHeaderTimeout` and friends on `http.Server`, and use a client with a timeout instead of `http.DefaultClient`
+- JSON v2 (`encoding/json/v2`) needs `GOEXPERIMENT=jsonv2` in 1.25–1.26, so do not use it there. From 1.27 it is fine to use, but replace existing `encoding/json` only after checking behavior differences (rejecting invalid UTF-8 and duplicate keys, etc.)
+- Tests: table-driven + `t.Run`, `t.Cleanup`, `t.TempDir`, `t.Setenv`, `go test -race`
+- Structured logging: `slog.InfoContext(ctx, "msg", "key", v)`, no PII in attributes

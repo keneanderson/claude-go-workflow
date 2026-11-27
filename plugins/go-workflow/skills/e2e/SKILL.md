@@ -1,43 +1,43 @@
 ---
 name: e2e
-description: go-workflow の Phase 5（Web のみ）。アプリを起動し、Playwright MCP で設計書の E2E シナリオ（正常系・異常系・権限）をブラウザ操作で確認、スクリーンショット付きで e2e.md に記録する。失敗は go-implementer で修正し Phase 4 から再確認。単体でも「/go-workflow:e2e」で使える。
+description: Phase 5 of go-workflow (web only). Starts the app, uses the Playwright MCP to walk through the design doc's E2E scenarios (happy path, error cases, permissions) in a browser, and records them with screenshots in e2e.md. Failures are fixed by go-implementer and re-checked from Phase 4. Can also be used on its own with "/go-workflow:e2e".
 argument-hint: "[--run=<RUN_DIR>] [--url=http://localhost:8080]"
 disable-model-invocation: true
 ---
 
-# Phase 5: Playwright による動作確認
+# Phase 5: Behavior check with Playwright
 
-入力: $ARGUMENTS
+Input: $ARGUMENTS
 
-> サブエージェントはプラグインの名前空間付きで起動する（例: `subagent_type: "go-workflow:go-architect"`）。リポジトリの `.claude/agents/` に同じ役割のエージェントがあればそちらを優先してよい。
+> Launch subagents with the plugin namespace (for example `subagent_type: "go-workflow:go-architect"`). If the repository's `.claude/agents/` has an agent with the same role, you may prefer that one.
 
-RUN_DIR: `--run=` 指定、なければ `bash ${CLAUDE_SKILL_DIR}/../../scripts/run-dir.sh latest`。
+RUN_DIR: the `--run=` value, otherwise `bash ${CLAUDE_SKILL_DIR}/../../scripts/run-dir.sh latest`.
 
-## 実行判定
+## Whether to run
 
-次のいずれかなら SKIP し、`run-dir.sh phase "$RUN_DIR" e2e skip "<理由>"` で記録:
-- `--no-e2e` が指定された
-- `context.md` の `web: false`
-- 差分（`git diff --name-only <base>...` + 未コミット）が HTTP ハンドラ / ルーティング / ミドルウェア / テンプレート / 静的ファイル / フロントエンド / API スキーマに及ばない
+SKIP in any of these cases, and record it with `run-dir.sh phase "$RUN_DIR" e2e skip "<reason>"`:
+- `--no-e2e` was given
+- `web: false` in `context.md`
+- The diff (`git diff --name-only <base>...` plus uncommitted changes) does not touch HTTP handlers / routing / middleware / templates / static files / frontend / API schemas
 
-## 起動情報の決定
+## Deciding how to start the app
 
-優先順:
-1. 引数 `--url=`
-2. `.claude/go-workflow.json` の `web.startCommand` / `web.baseURL` / `web.healthcheck` / `web.env`
-3. 推定: Makefile の `run` / `dev` / `serve` ターゲット、`compose.yaml` / `docker-compose.yml`、`air.toml`、`cmd/*/main.go` の listen アドレス、README の起動手順
+In priority order:
+1. The `--url=` argument
+2. `web.startCommand` / `web.baseURL` / `web.healthcheck` / `web.env` in `.claude/go-workflow.json`
+3. Inferred: Makefile `run` / `dev` / `serve` targets, `compose.yaml` / `docker-compose.yml`, `air.toml`, the listen address in `cmd/*/main.go`, the startup steps in the README
 
-推定に自信がない場合（DB 等の依存サービスが必要、複数候補がある）は AskUserQuestion で確認し、回答を `.claude/go-workflow.json` に保存するか提案する（保存はユーザーの同意後）。
+If you are not confident in the inference (dependent services such as a DB are needed, or there are several candidates), ask with AskUserQuestion and offer to save the answer to `.claude/go-workflow.json` (save only after the user agrees).
 
-## Playwright MCP の確認
+## Checking the Playwright MCP
 
-本プラグインは `.mcp.json` で Playwright MCP（`@playwright/mcp`）を同梱しています。ツールが見つからない場合は ToolSearch で `playwright browser` を検索してから判断し、それでもなければ `/mcp` での有効化をユーザーに案内し、API レベル（curl）の確認だけ行って SKIP 扱いにします。
+This plugin bundles the Playwright MCP (`@playwright/mcp`) via `.mcp.json`. If the tools are not found, search for `playwright browser` with ToolSearch before deciding; if they are still missing, tell the user how to enable it with `/mcp`, do only API-level checks (curl), and treat the phase as SKIP.
 
-## 手順（最大 2 回）
+## Procedure (up to 2 times)
 
-1. `go-e2e-tester` を起動（RUN_DIR、起動情報、design.md のシナリオ。スクリーンショットは `RUN_DIR/e2e/` に保存）
-2. 結果を `RUN_DIR/e2e.md` に保存
-3. PASS → 完了。FAIL → 失敗が実装起因なら `go-implementer`（モード `fix-e2e`）で修正 → Phase 4（quality）→ 再度この Phase。テストシナリオ・環境起因ならユーザーに報告
-4. 2 回で解決しなければユーザーに判断を仰ぐ
-5. 起動したサーバーが残っていないことを確認（`lsof -i :<port>`）
-6. `bash ${CLAUDE_SKILL_DIR}/../../scripts/run-dir.sh phase "$RUN_DIR" e2e done|skip|fail "<シナリオ数・結果 or SKIP 理由>"`
+1. Launch `go-e2e-tester` (RUN_DIR, startup information, the scenarios in design.md; screenshots go to `RUN_DIR/e2e/`)
+2. Save the result to `RUN_DIR/e2e.md`
+3. PASS → done. FAIL → if the failure is caused by the implementation, fix it with `go-implementer` (mode `fix-e2e`) → Phase 4 (quality) → this phase again. If it is caused by the test scenario or the environment, report to the user
+4. If it is not resolved after 2 times, ask the user to decide
+5. Make sure no server you started is left running (`lsof -i :<port>`)
+6. `bash ${CLAUDE_SKILL_DIR}/../../scripts/run-dir.sh phase "$RUN_DIR" e2e done|skip|fail "<number of scenarios and result, or the SKIP reason>"`

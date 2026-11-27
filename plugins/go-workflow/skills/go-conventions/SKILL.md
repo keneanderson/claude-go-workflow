@@ -1,27 +1,27 @@
 ---
 name: go-conventions
-description: モダンな Go の書き方（バージョン別の新機能・置き換え表）、Go のセキュリティチェックリスト、アーキテクチャ指針。Go コードの設計・実装・レビュー時、「モダナイズして」「最新の Go の書き方で」「セキュリティ観点で見て」と言われたときに参照する。リポジトリの CLAUDE.md / AGENTS.md / rules が常に優先する。
+description: How to write modern Go (new features by version and a replacement table), a Go security checklist, and architecture guidelines. Refer to it when designing, implementing or reviewing Go code, and when asked to "modernize this", "use the latest Go idioms" or "look at it from a security angle". The repository's CLAUDE.md / AGENTS.md / rules always take precedence.
 ---
 
-# Go Conventions（汎用指針）
+# Go Conventions (general guidelines)
 
-このスキルは **リポジトリ独自の規約がない部分を埋める既定値** です。優先順位は常に:
+This skill provides **defaults that fill the gaps where the repository has no conventions of its own**. The priority is always:
 
-1. リポジトリの `CLAUDE.md` / `AGENTS.md` / `.claude/rules/**` / ADR / `CONTRIBUTING.md`
-2. リポジトリ内の既存パターン
-3. このスキル
+1. The repository's `CLAUDE.md` / `AGENTS.md` / `.claude/rules/**` / ADRs / `CONTRIBUTING.md`
+2. Existing patterns in the repository
+3. This skill
 
-## 参照ファイル
+## Reference files
 
-- [modern-go.md](${CLAUDE_SKILL_DIR}/modern-go.md) — Go バージョン別の新機能と「旧 → 新」置き換え表、`go fix`（modernize）の使い方
-- [security.md](${CLAUDE_SKILL_DIR}/security.md) — Go のセキュリティチェックリスト
-- [architecture.md](${CLAUDE_SKILL_DIR}/architecture.md) — パッケージ設計・レイヤー・エラー・テストの指針
-- [definition-of-done.md](${CLAUDE_SKILL_DIR}/definition-of-done.md) — PR 前に毎回確認する完了の定義
-- [pitfalls.md](${CLAUDE_SKILL_DIR}/pitfalls.md) — linter が拾いにくい Go の落とし穴（レビューで指摘するパターン集）
+- [modern-go.md](${CLAUDE_SKILL_DIR}/modern-go.md) — new features by Go version, an "old → new" replacement table, and how to use `go fix` (modernize)
+- [security.md](${CLAUDE_SKILL_DIR}/security.md) — Go security checklist
+- [architecture.md](${CLAUDE_SKILL_DIR}/architecture.md) — guidelines for package design, layers, errors and tests
+- [definition-of-done.md](${CLAUDE_SKILL_DIR}/definition-of-done.md) — the definition of done to check before every PR
+- [pitfalls.md](${CLAUDE_SKILL_DIR}/pitfalls.md) — Go pitfalls linters rarely catch (patterns to flag in review)
 
-## 最重要ルール
+## Most important rules
 
-- 使える機能は **`go.mod` の `go` ディレクティブ** で決まる（インストール済みの Go ではない）。新機能を使う前に必ず確認する
-- 新規コードはモダンな書き方で書く。既存コードの一括モダナイズは差分が膨らむため、タスクのスコープ内（変更したファイル・関数）に限る。全体適用はユーザーの合意を得て別 PR にする
-- 不確かな API は推測で使わず `go doc <pkg>.<Symbol>` で確認する
-- コード理解には gopls MCP（`go_workspace` / `go_search` / `go_file_context` / `go_package_api` / `go_symbol_references` / `go_diagnostics` / `go_vulncheck`。ツール名は `mcp__plugin_go-workflow_gopls__*` など） が使えれば優先する: 編集前に `go_symbol_references` で影響範囲を確認し、編集後は `go_diagnostics` でビルドエラーを確認する
+- The available features are determined by **the `go` directive in `go.mod`** (not the installed Go). Always check it before using a new feature
+- Write new code in the modern style. Bulk-modernizing existing code bloats the diff, so limit it to the task's scope (changed files and functions). Applying it to everything needs the user's agreement and a separate PR
+- Do not guess at uncertain APIs; check them with `go doc <pkg>.<Symbol>`
+- To understand code, prefer the gopls MCP if available (`go_workspace` / `go_search` / `go_file_context` / `go_package_api` / `go_symbol_references` / `go_diagnostics` / `go_vulncheck`; tool names look like `mcp__plugin_go-workflow_gopls__*`): check the impact with `go_symbol_references` before editing, and check for build errors with `go_diagnostics` after editing

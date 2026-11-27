@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# PreToolUse フック（Edit/Write/MultiEdit）:
-#  1. 既存の lint / format / CI 設定の変更 → ユーザー確認（ask）
-#     エージェントがチェックを通すために設定を緩めるのを防ぎ、コード側で直させる
-#  2. 理由のない //nolint の追加 → 拒否（deny）
-# 無効化: .claude/go-workflow.json に {"hooks": {"protectConfig": false}}
-# フック自体の不具合でツールを止めないよう、想定外の状況では何もせず exit 0（fail-open）。
+# PreToolUse hook (Edit/Write/MultiEdit):
+#  1. Changes to existing lint / format / CI configs → ask the user
+#     Keeps agents from loosening configs to pass checks, so they fix the code instead
+#  2. Adding //nolint without a reason → deny
+# Disable: {"hooks": {"protectConfig": false}} in .claude/go-workflow.json
+# So that a bug in the hook never blocks tools, it does nothing and exits 0 in unexpected situations (fail-open).
 set -u
 
 command -v jq >/dev/null 2>&1 || exit 0
@@ -27,29 +27,29 @@ emit() { # $1: ask|deny, $2: reason
 base=$(basename "$file")
 case "$base" in
   .golangci.yml|.golangci.yaml|.golangci.toml|.golangci.json|.editorconfig|.pre-commit-config.yaml|lefthook.yml|lefthook.yaml|.commitlintrc*|commitlint.config.*)
-    [ -f "$file" ] && emit ask "[go-workflow] 既存の lint/format 設定 ($base) を変更しようとしています。チェックを通すために設定を緩めるのではなく、コード側で直すのが原則です。ユーザーが設定変更を意図している場合のみ許可してください。"
+    [ -f "$file" ] && emit ask "[go-workflow] This edit changes an existing lint/format config ($base). The rule is to fix the code rather than loosen the config to pass checks. Allow it only if the user intends to change the config."
     ;;
 esac
 case "$file" in
   */.github/workflows/*)
-    [ -f "$file" ] && emit ask "[go-workflow] CI ワークフロー ($base) を変更しようとしています。タスクで合意した変更でなければ許可しないでください。"
+    [ -f "$file" ] && emit ask "[go-workflow] This edit changes a CI workflow ($base). Do not allow it unless the change was agreed on for this task."
     ;;
 esac
 
 case "$file" in
   *.go)
-    # 追加されるテキスト（Write は content、Edit は new_string、MultiEdit は edits[].new_string）
+    # Text being added (content for Write, new_string for Edit, edits[].new_string for MultiEdit)
     added=$(printf '%s' "$input" | jq -r '[.tool_input.content, .tool_input.new_string, (.tool_input.edits // [] | .[].new_string)] | map(select(. != null)) | join("\n")' 2>/dev/null)
     before=$(printf '%s' "$input" | jq -r '[.tool_input.old_string, (.tool_input.edits // [] | .[].old_string)] | map(select(. != null)) | join("\n")' 2>/dev/null)
     new_nolint=$(printf '%s\n' "$added" | grep -E '//[[:space:]]*nolint' || true)
     if [ -n "$new_nolint" ]; then
-      # 既に存在していた nolint 行は対象外
+      # Skip nolint lines that already existed
       bad=$(printf '%s\n' "$new_nolint" | while IFS= read -r line; do
         printf '%s\n' "$before" | grep -qF -- "$line" && continue
-        # //nolint:<linter> // <理由> の形式でなければ違反
+        # Violation unless it has the form //nolint:<linter> // <reason>
         printf '%s\n' "$line" | grep -qE '//[[:space:]]*nolint:[a-zA-Z0-9_,-]+[[:space:]]*//[[:space:]]*[^[:space:]]' || printf '%s\n' "$line"
       done)
-      [ -n "$bad" ] && emit deny "[go-workflow] 理由のない //nolint は追加できません。まずコードを直してください。どうしても必要なら '//nolint:<linter> // <具体的な理由>' の形式で書いてください。対象: $(printf '%s' "$bad" | head -n 1 | sed 's/^[[:space:]]*//')"
+      [ -n "$bad" ] && emit deny "[go-workflow] A //nolint without a reason cannot be added. Fix the code first. If it is truly needed, write it as '//nolint:<linter> // <specific reason>'. Line: $(printf '%s' "$bad" | head -n 1 | sed 's/^[[:space:]]*//')"
     fi
     ;;
 esac

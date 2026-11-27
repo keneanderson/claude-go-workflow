@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# リポジトリのコンテキスト（Go バージョン、Claude/AI 設定、ツール、Web 判定、PR テンプレート）を
-# 決定的に収集して <RUN_DIR>/context.md に書き出し、標準出力にも出す。
+# Deterministically collects the repository context (Go version, Claude/AI settings, tools, web detection,
+# PR template), writes it to <RUN_DIR>/context.md, and also prints it to stdout.
 #   collect-context.sh <RUN_DIR>
 set -uo pipefail
 
@@ -10,10 +10,10 @@ cd "$root" || exit 1
 out="$run_dir/context.md"
 mkdir -p "$run_dir"
 
-# 探索から除外するディレクトリ
+# Directories excluded from the search
 prune=(-path ./vendor -prune -o -path ./node_modules -prune -o -path ./.git -prune -o -path ./.claude/go-workflow -prune -o)
 
-find_files() { # $1: maxdepth, rest: find の条件
+find_files() { # $1: maxdepth, rest: find predicates
   local depth=$1; shift
   find . -maxdepth "$depth" "${prune[@]}" "$@" -print 2>/dev/null | sed 's|^\./||' | sort
 }
@@ -48,7 +48,7 @@ go_installed=$( (cd "$(dirname "${gomod:-.}")" && go env GOVERSION) 2>/dev/null 
 modules=$(find_files 4 -name go.mod)
 gowork=""; [ -f go.work ] && gowork="go.work"
 
-# ---------- Web 判定 ----------
+# ---------- Web detection ----------
 web=false; web_reasons=""
 add_reason() { web=true; web_reasons="$web_reasons
   - $1"; }
@@ -66,7 +66,7 @@ pkgjson=$(find_files 3 -name package.json | head -n 3)
 [ -n "$pkgjson" ] && add_reason "frontend: $(echo "$pkgjson" | tr '\n' ' ')"
 pwconf=$(find_files 4 -name 'playwright.config.*')
 
-# ---------- 書き出し ----------
+# ---------- Output ----------
 {
 echo "# Repository Context"
 echo
@@ -89,7 +89,7 @@ if [ -n "$modules" ]; then echo "$modules" | sed 's/^/- /'; else echo "- (go.mod
 [ -n "$gowork" ] && echo "- workspace: go.work"
 echo
 
-echo "## Claude / AI の設定ファイル（リポジトリ規約。存在するものは必ず読むこと）"
+echo "## Claude / AI settings files (repository conventions; always read any that exist)"
 found_any=false
 list_section() { # $1: title, rest: files
   local title=$1; shift
@@ -105,13 +105,13 @@ IFS=$'\n'
 list_section "CLAUDE.md" $(find_files 4 \( -name CLAUDE.md -o -name CLAUDE.local.md \))
 list_section "AGENTS.md" $(find_files 4 \( -name AGENTS.md -o -name AGENT.md \))
 list_section ".claude/rules" $(find .claude/rules -type f 2>/dev/null | sort)
-list_section "その他の AI 向け規約" $(ls -1 .github/copilot-instructions.md GEMINI.md .windsurfrules .cursorrules 2>/dev/null; find .cursor/rules .github/instructions -type f 2>/dev/null | sort)
-list_section "開発ドキュメント" $(ls -1 CONTRIBUTING.md CONTRIBUTING.ja.md SECURITY.md docs/CONTRIBUTING.md 2>/dev/null; find docs -maxdepth 2 -type d \( -name adr -o -name adrs -o -name decisions -o -name architecture -o -name design \) 2>/dev/null | sort)
+list_section "Other AI conventions" $(ls -1 .github/copilot-instructions.md GEMINI.md .windsurfrules .cursorrules 2>/dev/null; find .cursor/rules .github/instructions -type f 2>/dev/null | sort)
+list_section "Development docs" $(ls -1 CONTRIBUTING.md CONTRIBUTING.ja.md SECURITY.md docs/CONTRIBUTING.md 2>/dev/null; find docs -maxdepth 2 -type d \( -name adr -o -name adrs -o -name decisions -o -name architecture -o -name design \) 2>/dev/null | sort)
 unset IFS
 
 if ls .claude/agents/*.md >/dev/null 2>&1; then
   found_any=true
-  echo "### .claude/agents（リポジトリ独自エージェント）"
+  echo "### .claude/agents (repository agents)"
   echo "| name | model | description |"
   echo "|------|-------|-------------|"
   for f in .claude/agents/*.md; do
@@ -122,7 +122,7 @@ if ls .claude/agents/*.md >/dev/null 2>&1; then
 fi
 if ls .claude/skills/*/SKILL.md >/dev/null 2>&1; then
   found_any=true
-  echo "### .claude/skills（リポジトリ独自スキル）"
+  echo "### .claude/skills (repository skills)"
   echo "| name | description |"
   echo "|------|-------------|"
   for f in .claude/skills/*/SKILL.md; do
@@ -138,15 +138,15 @@ if ls .claude/commands/*.md >/dev/null 2>&1; then
   echo
 fi
 for f in .claude/settings.json .mcp.json .claude/go-workflow.json; do
-  [ -f "$f" ] && { found_any=true; echo "- 設定: $f"; }
+  [ -f "$f" ] && { found_any=true; echo "- settings: $f"; }
 done
 if [ -f .mcp.json ] && has_cmd jq; then
   echo "  - MCP servers: $(jq -r '(.mcpServers // .) | keys | join(", ")' .mcp.json 2>/dev/null)"
 fi
-$found_any || echo "- （リポジトリ独自の Claude / AI 設定は見つからなかった。go-conventions の既定値を使う）"
+$found_any || echo "- (no repository-specific Claude / AI settings found; use the go-conventions defaults)"
 echo
 
-echo "## ツール"
+echo "## Tools"
 if [ -f Makefile ]; then
   targets=$(grep -E '^[A-Za-z0-9][A-Za-z0-9_.-]*:([^=]|$)' Makefile | cut -d: -f1 | grep -v '^\.' | sort -u | tr '\n' ' ')
   echo "- Makefile targets: $targets"
@@ -171,25 +171,25 @@ for t in golangci-lint goimports gofumpt staticcheck govulncheck gopls benchstat
 echo
 echo
 
-echo "## Web 判定: $web"
+echo "## Web detection: $web"
 [ -n "$web_reasons" ] && echo "$web_reasons" | sed '/^$/d'
 [ -n "$pwconf" ] && echo "- playwright config: $pwconf"
 echo
 
-echo "## PR テンプレート"
+echo "## PR template"
 pr_tmpl=$(find . .github docs -maxdepth 1 -type f -iname 'pull_request_template.md' 2>/dev/null | sed 's|^\./||' | sort -u; find .github -maxdepth 1 -type d -iname 'PULL_REQUEST_TEMPLATE' -exec find {} -type f \; 2>/dev/null)
-if [ -n "$pr_tmpl" ]; then echo "$pr_tmpl" | sed 's/^/- /'; else echo "- なし（go-pr-writer の既定テンプレートを使う）"; fi
+if [ -n "$pr_tmpl" ]; then echo "$pr_tmpl" | sed 's/^/- /'; else echo "- none (use the go-pr-writer default template)"; fi
 echo
 
 if [ -f .claude/go-workflow.json ]; then
-  echo "## .claude/go-workflow.json（プロジェクト設定）"
+  echo "## .claude/go-workflow.json (project settings)"
   echo '```json'
   cat .claude/go-workflow.json
   echo '```'
   echo
 fi
 
-echo "## 直近のコミット"
+echo "## Recent commits"
 git log --oneline -n 10 2>/dev/null | sed 's/^/- /'
 } >"$out"
 

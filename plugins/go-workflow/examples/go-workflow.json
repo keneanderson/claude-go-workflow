@@ -1,5 +1,5 @@
 {
-  "$comment": "リポジトリの .claude/go-workflow.json に置くと go-workflow の既定値を上書きできる（すべて任意）。dod は既定の Definition of Done に追加する項目",
+  "$comment": "Place this at .claude/go-workflow.json in a repository to override go-workflow defaults (every key is optional). dod lists items added to the default Definition of Done",
   "commands": {
     "format": "make fmt",
     "modernize": "go fix ./internal/...",
@@ -28,7 +28,7 @@
     "protectConfig": true
   },
   "dod": [
-    "マイグレーションは up/down 両方を用意する",
-    "OpenAPI 定義 (api/openapi.yaml) を更新する"
+    "Provide both up and down migrations",
+    "Update the OpenAPI definition (api/openapi.yaml)"
   ]
 }

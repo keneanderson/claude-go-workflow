@@ -1,7 +1,7 @@
 {
   "name": "go-workflow",
-  "version": "0.2.0",
-  "description": "Go 開発の一気通貫ワークフロー: 設計(Opus) → 設計レビュー(Opus) → 実装(Sonnet) → lint/format/test/modernize → Playwright E2E → 実装レビューループ(Sonnet) → PR 作成 → git 操作",
+  "version": "0.2.1",
+  "description": "End-to-end Go development workflow: design (Opus) → design review (Opus) → implementation (Sonnet) → lint/format/test/modernize → Playwright E2E → implementation review loop (Sonnet) → PR creation → git operations",
   "author": {
     "name": "keneanderson",
     "url": "https://github.com/keneanderson"

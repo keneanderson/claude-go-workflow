@@ -1,48 +1,48 @@
 ---
 name: review
-description: go-workflow の Phase 6（実装レビューループ）。Sonnet の go-code-reviewer と go-security-reviewer（＋リポジトリ独自のレビュー agent）を並列実行し、確信度の高い指摘だけを採用、Critical/High は Opus の go-finding-verifier で検証してから go-implementer で修正 → quality 再実行 → 再レビューを最大3回繰り返す。単体でも「/go-workflow:review」で現在の差分に使える。
+description: Phase 6 of go-workflow (implementation review loop). Runs Sonnet go-code-reviewer and go-security-reviewer (plus the repository's own review agents) in parallel, keeps only high-confidence findings, verifies Critical/High findings with Opus go-finding-verifier, then fixes with go-implementer → re-runs quality → re-reviews, up to 3 times. Can also be used on its own with "/go-workflow:review" on the current diff.
 argument-hint: "[--run=<RUN_DIR>] [--base=<ref>] [--max-review=3]"
 disable-model-invocation: true
 ---
 
-# Phase 6: 実装レビュー ⇄ 修正ループ（sonnet + 検証 opus）
+# Phase 6: Implementation review ⇄ fix loop (sonnet + opus verification)
 
-入力: $ARGUMENTS
+Input: $ARGUMENTS
 
-> サブエージェントはプラグインの名前空間付きで起動する（例: `subagent_type: "go-workflow:go-code-reviewer"`）。リポジトリの `.claude/agents/` に同じ役割のエージェントがあればそちらを優先してよい。
+> Launch subagents with the plugin namespace (for example `subagent_type: "go-workflow:go-code-reviewer"`). If the repository's `.claude/agents/` has an agent with the same role, you may prefer that one.
 
-スクリプト: `${CLAUDE_SKILL_DIR}/../../scripts/`（以下 `SCRIPTS`）
-RUN_DIR: `--run=` 指定、なければ `bash SCRIPTS/run-dir.sh latest`（なければ `new review` で作成し `collect-context.sh` を実行）。
-ベース: `--base=` 指定、なければ `context.md` の `default_branch`（`origin/<default_branch>` があればそちら）。
+Scripts: `${CLAUDE_SKILL_DIR}/../../scripts/` (referred to as `SCRIPTS` below)
+RUN_DIR: the `--run=` value, otherwise `bash SCRIPTS/run-dir.sh latest` (if none exists, create one with `new review` and run `collect-context.sh`).
+Base: the `--base=` value, otherwise `default_branch` from `context.md` (`origin/<default_branch>` if it exists).
 
-## 上限回数の考え方（既定 3 回）
+## Why the limit is 3 rounds by default
 
-- 1 回目で大半の指摘が出て、2 回目で修正確認と修正起因の回帰が見つかる。3 回目は収束確認
-- それ以上回すと、レビュアーが軽微な指摘を出し続けて差分が膨らむ（churn）傾向があり、コストに見合わない
-- 3 回で Critical/High が残るのは設計レベルの問題である可能性が高いため、人間に判断を戻す
-- 誤検知を修正し続けることが churn の最大の原因なので、**修正前に検証ステップを挟む**
+- Round 1 surfaces most findings, and round 2 confirms the fixes and catches regressions they caused. Round 3 confirms convergence
+- Beyond that, reviewers tend to keep raising minor findings and the diff bloats (churn), which is not worth the cost
+- Critical/High findings still left after 3 rounds are likely design-level problems, so the decision goes back to a human
+- Fixing false positives over and over is the biggest cause of churn, so **a verification step comes before any fix**
 
-## 1 イテレーション（n = 1..上限）
+## One iteration (n = 1..limit)
 
 1. `bash SCRIPTS/run-dir.sh phase "$RUN_DIR" review iter "round <n>"`
-2. 以下を **同じメッセージで並列に** 起動:
-   - `go-code-reviewer`（RUN_DIR、n、ベース、前回の `review-<n-1>.md`）。n ≥ 2 では **修正差分のみ** を対象にする再レビューとして、`git diff refs/go-workflow/<run>/pre-review-fix-<n-1>` を渡す（前回指摘の ADDRESSED / NOT ADDRESSED と、修正差分での新たな破損だけを見る。スコープ外の気付きはメモ止まりでループを延ばさない）
-   - `go-security-reviewer`（RUN_DIR、モード `code`、n、ベース）。n ≥ 2 で前回セキュリティ指摘が 0 件かつ修正がセキュリティ関連箇所を触っていなければ省略可
-   - `context.md` に検出された **リポジトリ独自のレビュー agent / skill**（名前に review / reviewer を含むもの等）
-3. **フィルタ**: 確信度 80 未満の指摘、pre-existing（差分外）、linter で検出できる種類の指摘は捨てる（PR 本文の参考情報にも載せない）
-4. **検証**: 残った Critical / High（セキュリティ含む）について、`go-finding-verifier` を **指摘ごとに並列** で起動（1 メッセージで最大 5 体。多い場合は関連する指摘をまとめて渡す）。REJECTED は「Won't fix（検証で誤検知）」、UNCERTAIN はユーザーに判断を仰ぐ
-5. 統合結果を `RUN_DIR/review-<n>.md`（セキュリティは `security-<n>.md` も）に保存。各指摘に「採用 / Deferred / Won't fix」と理由を付ける
-6. **トリアージ**:
-   - CONFIRMED の Critical / High: 必ず修正
-   - Medium: 原則修正。設計変更を伴う・スコープ外のものは Deferred として理由を記録
-   - Low / Nit: 修正コストが小さいもののみ。残りは PR 本文の「残課題」へ
-7. 修正対象が 0 件 → `bash SCRIPTS/run-dir.sh phase "$RUN_DIR" review done "<重大度別件数の推移>"` で終了
-8. `bash SCRIPTS/checkpoint.sh save "$RUN_DIR" pre-review-fix-<n>` → `go-implementer`（モード `fix-review`、対象指摘 ID 一覧と指摘本文をそのまま）で修正 → Phase 4（quality）の手順で再チェック
-   - 2 回目以降は、可能なら前回の go-implementer に SendMessage で続きを依頼する（文脈を保ったまま直せる）。使えなければ `implement.md` と前回の修正報告を渡して新しく起動する
-   - **最終ラウンド**（n = 上限）でも同じ指摘が NOT ADDRESSED のまま残っている場合は、`go-implementer` を `model: opus` で新しく起動し、「前任者が N 回修正を試みた。review-*.md と implement.md に経緯がある」と伝えて引き継がせる（同じ実装者は自分の問題に気付けないことが多い）
-   - 修正報告に「対象テストのコマンドと出力」がなければ、再レビューの前に go-implementer に追記させる
-9. 修正で quality / テストが悪化して戻せない場合は `checkpoint.sh restore "$RUN_DIR" pre-review-fix-<n>` で戻し、別の修正方針を試す
-10. 修正が Web の振る舞いに影響する場合は Phase 5 の該当シナリオのみ再確認
+2. Launch the following **in parallel in the same message**:
+   - `go-code-reviewer` (RUN_DIR, n, base, the previous `review-<n-1>.md`). For n ≥ 2, pass `git diff refs/go-workflow/<run>/pre-review-fix-<n-1>` as a re-review of **only the fix diff** (it looks only at whether previous findings are ADDRESSED / NOT ADDRESSED and at new breakage in the fix diff; out-of-scope observations are only noted and do not extend the loop)
+   - `go-security-reviewer` (RUN_DIR, mode `code`, n, base). For n ≥ 2 it may be skipped if the previous round had 0 security findings and the fixes did not touch security-related code
+   - **The repository's own review agents / skills** detected in `context.md` (those with review / reviewer in the name, etc.)
+3. **Filter**: drop findings with confidence below 80, pre-existing issues (outside the diff), and kinds of findings a linter can detect (do not list them in the PR body as reference either)
+4. **Verify**: for the remaining Critical / High findings (security included), launch `go-finding-verifier` **in parallel, one per finding** (up to 5 per message; if there are many, group related findings together). REJECTED becomes "Won't fix (false positive per verification)", and for UNCERTAIN, ask the user to decide
+5. Save the merged result to `RUN_DIR/review-<n>.md` (and security to `security-<n>.md`). Mark each finding "Adopted / Deferred / Won't fix" with a reason
+6. **Triage**:
+   - CONFIRMED Critical / High: always fix
+   - Medium: fix as a rule. Those that need design changes or are out of scope are recorded as Deferred with a reason
+   - Low / Nit: only those that are cheap to fix. The rest go to "Remaining work" in the PR body
+7. Nothing to fix → finish with `bash SCRIPTS/run-dir.sh phase "$RUN_DIR" review done "<count by severity over the rounds>"`
+8. `bash SCRIPTS/checkpoint.sh save "$RUN_DIR" pre-review-fix-<n>` → fix with `go-implementer` (mode `fix-review`, with the list of finding IDs and the finding text as is) → re-check with the Phase 4 (quality) procedure
+   - From round 2 on, if possible, ask the previous go-implementer to continue via SendMessage (it can fix with its context intact). If that is not available, launch a new one with `implement.md` and the previous fix report
+   - In the **final round** (n = limit), if the same finding is still NOT ADDRESSED, launch a fresh `go-implementer` with `model: opus` and hand over with "the previous implementer tried to fix this N times; the history is in review-*.md and implement.md" (the same implementer often cannot see its own problem)
+   - If the fix report lacks "the command and output of the relevant tests", have go-implementer add them before re-reviewing
+9. If a fix makes quality / tests worse and cannot be undone, roll back with `checkpoint.sh restore "$RUN_DIR" pre-review-fix-<n>` and try a different fix
+10. If the fix affects web behavior, re-check only the relevant scenarios from Phase 5
 11. n += 1
 
-上限到達時に CONFIRMED の Critical / High が残っていれば、残件・各案・推奨を提示して AskUserQuestion（「設計に戻る」「このまま PR 化（残件を明記）」「手動で対応」）。
+If CONFIRMED Critical / High findings remain when the limit is reached, present the remaining items, the options and your recommendation, and ask with AskUserQuestion ("Go back to design" / "Open the PR as is (listing the remaining items)" / "Handle manually").

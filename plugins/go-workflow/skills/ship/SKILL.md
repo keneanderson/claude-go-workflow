@@ -1,63 +1,63 @@
 ---
 name: ship
-description: go-workflow の Phase 8（git 操作）。ブランチ作成・ステージング・コミット・push・gh pr create のコマンドを生成し、モード（ask=確認して実行 / run=実行 / print=コマンド提示のみ）に従って実行する。単体でも「/go-workflow:ship」で使える。
+description: Phase 8 of go-workflow (git operations). Generates the commands for creating the branch, staging, committing, pushing and gh pr create, and runs them according to the mode (ask = confirm then run / run = run / print = show commands only). Can also be used on its own with "/go-workflow:ship".
 argument-hint: "[--run=<RUN_DIR>] [--git=ask|run|print] [--draft]"
 disable-model-invocation: true
 ---
 
-# Phase 8: git 操作
+# Phase 8: git operations
 
-入力: $ARGUMENTS
+Input: $ARGUMENTS
 
-> サブエージェントはプラグインの名前空間付きで起動する（例: `subagent_type: "go-workflow:go-architect"`）。リポジトリの `.claude/agents/` に同じ役割のエージェントがあればそちらを優先してよい。
+> Launch subagents with the plugin namespace (for example `subagent_type: "go-workflow:go-architect"`). If the repository's `.claude/agents/` has an agent with the same role, you may prefer that one.
 
-RUN_DIR: `--run=` 指定、なければ `bash ${CLAUDE_SKILL_DIR}/../../scripts/run-dir.sh latest`。`pr.md` / `pr-meta.txt` がなければ先に `/go-workflow:pr` の手順を実行する。
+RUN_DIR: the `--run=` value, otherwise `bash ${CLAUDE_SKILL_DIR}/../../scripts/run-dir.sh latest`. If `pr.md` / `pr-meta.txt` do not exist, run the `/go-workflow:pr` procedure first.
 
-## モード
+## Modes
 
-優先順: 引数 `--git=` → `.claude/go-workflow.json` の `git.mode` → 既定 `ask`
+Priority: the `--git=` argument → `git.mode` in `.claude/go-workflow.json` → default `ask`
 
-| モード | 動作 |
-|--------|------|
-| `ask`（既定） | コマンド一式を提示し、AskUserQuestion で「すべて実行（推奨）」「コミットまで実行（push しない）」「コマンドだけ表示」から選んでもらう |
-| `run` | 確認なしで実行（ユーザーがモードを明示した場合のみ） |
-| `print` | 実行せず、コピーして使えるコマンドを `bash` コードブロックで提示し、`RUN_DIR/git-commands.sh` にも保存 |
+| Mode | Behavior |
+|------|----------|
+| `ask` (default) | Show the full set of commands and ask with AskUserQuestion: "Run everything (recommended)" / "Run up to the commit (no push)" / "Just show the commands" |
+| `run` | Run without confirmation (only when the user specified this mode explicitly) |
+| `print` | Do not run; show copy-ready commands in a `bash` code block and also save them to `RUN_DIR/git-commands.sh` |
 
-## 安全ルール（どのモードでも厳守）
+## Safety rules (always, in every mode)
 
-- `git push --force` / `--force-with-lease`、`git reset --hard`、`git clean`、履歴の書き換えをしない
-- デフォルトブランチ（main / master / develop など `context.md` 記載のもの）に直接コミット・push しない。デフォルトブランチ上なら必ず新ブランチを切る
-- `git add -A` / `git add .` を使わず、変更ファイルを明示して追加する。`.env`、鍵、`*.pem`、認証情報らしきファイル、`.claude/go-workflow/` は追加しない
-- コミット前に `git diff --cached --stat` を確認し、意図しないファイルが入っていないか確かめる
-- コミットフックが失敗したら `--no-verify` で回避せず、原因を直して新しいコミットを作る
-- コミットメッセージの規約（Conventional Commits、言語、Co-Authored-By 等）は CLAUDE.md / AGENTS.md / CONTRIBUTING / commitlint 設定 / 直近の `git log` に従う
+- Never use `git push --force` / `--force-with-lease`, `git reset --hard`, `git clean`, or rewrite history
+- Never commit or push directly to the default branch (main / master / develop, or whatever `context.md` lists). If on the default branch, always create a new branch
+- Do not use `git add -A` / `git add .`; add the changed files explicitly. Never add `.env`, keys, `*.pem`, files that look like credentials, or `.claude/go-workflow/`
+- Before committing, check `git diff --cached --stat` to make sure no unintended files are included
+- If a commit hook fails, do not bypass it with `--no-verify`; fix the cause and create a new commit
+- Follow the commit message conventions (Conventional Commits, language, Co-Authored-By, etc.) from CLAUDE.md / AGENTS.md / CONTRIBUTING / commitlint settings / the recent `git log`
 
-## 生成するコマンド（例）
+## Generated commands (example)
 
 ```bash
-# 1. ブランチ（デフォルトブランチ上 or ブランチ名が無関係な場合のみ）
+# 1. Branch (only if on the default branch or the branch name is unrelated)
 git switch -c <BRANCH>
 
-# 2. ステージング（ファイルを明示）
+# 2. Staging (name the files explicitly)
 git add path/to/a.go path/to/a_test.go ...
 git diff --cached --stat
 
-# 3. コミット（メッセージはファイル経由で安全に渡す）
+# 3. Commit (pass the message safely through a file)
 git commit -F "$RUN_DIR/commit-msg.txt"
 
 # 4. push
 git push -u origin <BRANCH>
 
-# 5. PR 作成
+# 5. Create the PR
 gh pr create --base <default_branch> --head <BRANCH> \
   --title "<TITLE>" --body-file "$RUN_DIR/pr.md" [--draft]
 ```
 
-- コミットメッセージは `pr-meta.txt` の COMMIT を 1 行目に、本文に変更の要点（3〜5 行）を書いて `RUN_DIR/commit-msg.txt` に保存してから使う
-- 変更が論理的に分かれる場合（例: リファクタと機能追加、生成物）は、コミットを分ける案を提示してよい
-- 既存の PR がある場合（`gh pr view --json url` が成功）は新規作成せず、`gh pr edit --body-file` で本文更新を提案する
-- `gh` が未認証 / リモートがない場合は、push と PR 作成のコマンドだけを提示する
+- For the commit message, put COMMIT from `pr-meta.txt` on the first line and the key points of the change (3–5 lines) in the body, save it to `RUN_DIR/commit-msg.txt`, then use it
+- If the change splits into logical parts (e.g. a refactor and a feature, or generated files), you may propose splitting the commits
+- If a PR already exists (`gh pr view --json url` succeeds), do not create a new one; propose updating the body with `gh pr edit --body-file`
+- If `gh` is not authenticated or there is no remote, show only the push and PR creation commands
 
-## 完了
+## Completion
 
-PR URL（作成した場合）を報告し、`bash ${CLAUDE_SKILL_DIR}/../../scripts/run-dir.sh phase "$RUN_DIR" ship done "<PR URL or print>"` で記録します。チェックポイント（`refs/go-workflow/*`）は不要になったら `git for-each-ref --format='%(refname)' refs/go-workflow/<run> | xargs -n1 git update-ref -d` で削除できることを案内します（push されないので残っていても害はない）。CI が設定されていれば `gh pr checks` で状態を確認する方法を案内します。
+Report the PR URL (if created) and record it with `bash ${CLAUDE_SKILL_DIR}/../../scripts/run-dir.sh phase "$RUN_DIR" ship done "<PR URL or print>"`. Mention that the checkpoints (`refs/go-workflow/*`) can be deleted once no longer needed with `git for-each-ref --format='%(refname)' refs/go-workflow/<run> | xargs -n1 git update-ref -d` (they are never pushed, so leaving them is harmless). If CI is set up, explain how to check its status with `gh pr checks`.

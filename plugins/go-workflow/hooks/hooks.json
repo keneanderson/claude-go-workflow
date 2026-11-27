@@ -1,5 +1,5 @@
 {
-  "description": "go-workflow: Go ファイル編集後の自動整形と、lint 設定の緩和・理由なし //nolint の防止（.claude/go-workflow.json の hooks.formatOnEdit / hooks.protectConfig で無効化可）",
+  "description": "go-workflow: auto-format Go files after edits, and prevent loosening lint configs or adding //nolint without a reason (disable with hooks.formatOnEdit / hooks.protectConfig in .claude/go-workflow.json)",
   "hooks": {
     "PreToolUse": [
       {

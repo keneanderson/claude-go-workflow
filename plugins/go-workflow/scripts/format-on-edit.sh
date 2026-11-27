@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# PostToolUse フック: Edit/Write された .go ファイルを整形する。失敗してもツール実行は妨げない。
-# 無効化: .claude/go-workflow.json に {"hooks": {"formatOnEdit": false}}
-# 独自コマンド: {"commands": {"formatFile": "gofumpt -w"}}（ファイルパスは末尾に付与される）
+# PostToolUse hook: format .go files touched by Edit/Write. A failure never blocks the tool call.
+# Disable: {"hooks": {"formatOnEdit": false}} in .claude/go-workflow.json
+# Custom command: {"commands": {"formatFile": "gofumpt -w"}} (the file path is appended)
 set -u
 
 input=$(cat)
@@ -33,7 +33,7 @@ if command -v goimports >/dev/null 2>&1; then
 else
   gofmt -w "$file" >/dev/null 2>&1
 fi
-# リポジトリが gofumpt を採用している場合のみ gofumpt をかける
+# Run gofumpt only if the repository uses it
 if command -v gofumpt >/dev/null 2>&1 && grep -qs 'gofumpt' "$proj"/.golangci.* "$proj/Makefile" 2>/dev/null; then
   gofumpt -w "$file" >/dev/null 2>&1
 fi

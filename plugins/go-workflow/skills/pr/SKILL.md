@@ -1,34 +1,34 @@
 ---
 name: pr
-description: go-workflow の Phase 7。go-pr-writer（sonnet）で PR タイトル・本文（概要・変更箇所・影響範囲・設計判断・セキュリティ・テスト・Playwright 動作確認・レビュー結果・デプロイ/ロールバック等）を作成し pr.md に保存する。リポジトリの PR テンプレートと規約を優先。単体でも「/go-workflow:pr」で使える。
+description: Phase 7 of go-workflow. Has go-pr-writer (sonnet) write the PR title and body (summary, changes, impact, design decisions, security, tests, Playwright check, review results, deploy/rollback, etc.) and saves it to pr.md. Prefers the repository's PR template and conventions. Can also be used on its own with "/go-workflow:pr".
 argument-hint: "[--run=<RUN_DIR>] [--base=<ref>]"
 disable-model-invocation: true
 ---
 
-# Phase 7: PR タイトル・本文の作成（sonnet）
+# Phase 7: Writing the PR title and body (sonnet)
 
-入力: $ARGUMENTS
+Input: $ARGUMENTS
 
-> サブエージェントはプラグインの名前空間付きで起動する（例: `subagent_type: "go-workflow:go-architect"`）。リポジトリの `.claude/agents/` に同じ役割のエージェントがあればそちらを優先してよい。
+> Launch subagents with the plugin namespace (for example `subagent_type: "go-workflow:go-architect"`). If the repository's `.claude/agents/` has an agent with the same role, you may prefer that one.
 
-RUN_DIR: `--run=` 指定、なければ `bash ${CLAUDE_SKILL_DIR}/../../scripts/run-dir.sh latest`（なければ `new pr` で作成し `collect-context.sh` を実行）。
+RUN_DIR: the `--run=` value, otherwise `bash ${CLAUDE_SKILL_DIR}/../../scripts/run-dir.sh latest` (if none exists, create one with `new pr` and run `collect-context.sh`).
 
-## モデル選定の理由
+## Why this model
 
-PR 本文は差分の要約に加え「影響範囲」「互換性」の判断が要るため、haiku ではなく sonnet を使う。設計書・レビュー結果が揃っていれば opus は不要。
+Besides summarizing the diff, the PR body needs judgment about "impact" and "compatibility", so it uses sonnet rather than haiku. With the design doc and review results in hand, opus is not needed.
 
-## 手順
+## Procedure
 
-0. **検証のやり直し（証拠の取得）**: これまでの結果を流用せず、PR の直前にチェックモード（自動修正なし）で実行し直す。build / vet / test は全体、format / modernize / lint は今回の差分が対象
+0. **Re-run verification (gather evidence)**: do not reuse earlier results; re-run in check mode (no auto-fix) right before the PR. build / vet / test cover everything, while format / modernize / lint cover this diff
    ```bash
    bash "${CLAUDE_SKILL_DIR}/../../scripts/quality.sh" --base origin/<default_branch> --log "$RUN_DIR/verify.log"
    ```
-   `QUALITY: FAIL` なら PR を作らず Phase 4 に戻る。`go fix -diff` の提案（WARN）が今回の差分内にあれば直す。PR 本文の「テスト」「カバレッジ」はこの `verify.log` を根拠にする
-0-b. **Definition of Done の確認**: リポジトリに DoD（`docs/definition-of-done.md`、CONTRIBUTING のチェックリスト）があればそれを、なければ `${CLAUDE_SKILL_DIR}/../go-conventions/definition-of-done.md` を使い（`.claude/go-workflow.json` の `dod` 配列はどちらの場合も追加項目として加える）、各項目を RUN_DIR の成果物と実際の差分で確認して `RUN_DIR/dod.md` に ✅ / ❌ / N/A と根拠を書く。❌ が「直せるもの」ならこの時点で直し（Phase 4 を再実行）、直せないものは PR 本文に明記する
-1. `go-pr-writer` を起動（RUN_DIR、ベースブランチ）。単体実行で design.md 等がない場合は「差分のみから作成し、不明な項目は『要記入』と書くこと」と伝える
-2. 返答の 1〜3 行目（`TITLE:` / `COMMIT:` / `BRANCH:`）を取り出し、本文を `RUN_DIR/pr.md`、メタ情報を `RUN_DIR/pr-meta.txt` に保存
-3. 自分で検証:
-   - 本文の「テスト」「動作確認」が `quality.log` / `e2e.md` の実際の結果と一致しているか（未実施を実施済みと書いていないか）
-   - 秘密情報・内部 URL・個人情報が含まれていないか
-4. タイトルと本文の冒頭をユーザーに提示する（全文は `RUN_DIR/pr.md` へのリンクで示す）
-5. `bash ${CLAUDE_SKILL_DIR}/../../scripts/run-dir.sh phase "$RUN_DIR" pr done "<タイトル>"`
+   On `QUALITY: FAIL`, do not create the PR; go back to Phase 4. If `go fix -diff` has suggestions (WARN) inside this diff, fix them. The "Tests" and "Coverage" in the PR body are based on this `verify.log`
+0-b. **Check the Definition of Done**: if the repository has a DoD (`docs/definition-of-done.md`, a checklist in CONTRIBUTING), use it; otherwise use `${CLAUDE_SKILL_DIR}/../go-conventions/definition-of-done.md` (in either case, add the `dod` array in `.claude/go-workflow.json` as extra items). Check each item against the RUN_DIR artifacts and the actual diff, and write ✅ / ❌ / N/A with evidence to `RUN_DIR/dod.md`. If a ❌ can be fixed, fix it now (re-run Phase 4); state those that cannot in the PR body
+1. Launch `go-pr-writer` (RUN_DIR, base branch). When run on its own without design.md and the like, tell it to "write it from the diff only, and put 'TODO' for anything unknown"
+2. Take lines 1–3 of the reply (`TITLE:` / `COMMIT:` / `BRANCH:`), and save the body to `RUN_DIR/pr.md` and the metadata to `RUN_DIR/pr-meta.txt`
+3. Verify it yourself:
+   - Do the "Tests" and "Behavior check" sections match the actual results in `quality.log` / `e2e.md` (nothing not run is described as done)?
+   - Does it contain no secrets, internal URLs or personal information?
+4. Show the title and the beginning of the body to the user (link to `RUN_DIR/pr.md` for the full text)
+5. `bash ${CLAUDE_SKILL_DIR}/../../scripts/run-dir.sh phase "$RUN_DIR" pr done "<title>"`
